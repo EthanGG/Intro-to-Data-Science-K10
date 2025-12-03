@@ -170,44 +170,58 @@ ggsave("figure2_target_achievement.png", fig2, width = 10, height = 6, dpi = 300
 cat("  ✓ Saved: figure2_target_achievement.png\n\n")
 
 # ----------------------------------------------------------------------------
-# FIGURE 3: TOP AND BOTTOM PERFORMERS
+# FIGURE 3: SHARE OF LDCs ACHIEVING 7% TARGET 
 # ----------------------------------------------------------------------------
+cat("Creating Figure 3: Share of LDCs Achieving Target...\n")
 
-cat("Creating Figure 3: Top and Bottom Performers...\n")
-
-ldc_performance <- analysis_period %>%
+ldc_count_by_continent <- analysis_period %>%
   filter(is_ldc == TRUE) %>%
-  group_by(country, code, continent) %>%
-  summarise(avg_growth = mean(gdp_growth_rate, na.rm = TRUE),
-            n_years = n(), .groups = "drop") %>%
-  filter(n_years >= 3)
+  distinct(code, continent) %>%
+  group_by(continent) %>%
+  summarise(n_ldcs = n_distinct(code), .groups = "drop")
 
-top_10 <- ldc_performance %>% arrange(desc(avg_growth)) %>% 
-  head(10) %>% mutate(performance = "Top 10 Performers")
-bottom_10 <- ldc_performance %>% arrange(avg_growth) %>% 
-  head(10) %>% mutate(performance = "Bottom 10 Performers")
+target_achievement <- analysis_period %>%
+  filter(!is.na(continent), is_ldc == TRUE) %>%
+  group_by(continent) %>%
+  summarise(
+    total_obs = n(),
+    above_7pct = sum(gdp_growth_rate >= 7, na.rm = TRUE),
+    pct_achieving = round((above_7pct / total_obs) * 100, 1),
+    .groups = "drop"
+  ) %>%
+  left_join(ldc_count_by_continent, by = "continent")
 
-performers <- bind_rows(top_10, bottom_10)
-
-fig3 <- ggplot(performers, aes(x = avg_growth, y = reorder(country, avg_growth),
-                               fill = continent)) +
-  geom_bar(stat = "identity", width = 0.7) +
-  geom_vline(xintercept = 7, linetype = "dashed", color = "red", linewidth = 1) +
-  facet_wrap(~performance, scales = "free_y", ncol = 1) +
+fig3 <- ggplot(target_achievement, 
+               aes(x = reorder(continent, pct_achieving), 
+                   y = pct_achieving, 
+                   fill = continent)) +
+  geom_bar(stat = "identity", width = 0.7, show.legend = FALSE) +
+  
+  geom_text(aes(label = paste0(
+    round(pct_achieving, 1), "%\n",
+    "(", n_ldcs, " LDCs | ", total_obs, " obs)"
+  )), hjust = -0.1, size = 3.5) +
+  
+  coord_flip() +
+  
   labs(
-    title = "Figure 3: Best and Worst Performing LDCs",
-    subtitle = "Average GDP Growth Rate (2015-2023) | Red line: 7% target",
-    x = "Average Annual GDP Growth Rate (%)", y = NULL,
-    fill = "Continent"
+    title = "Figure 3: Share of LDC Country-Years Achieving 7% Growth",
+    subtitle = "By Continent (2015-2023) | Numbers show: % (LDC count | total observations)",
+    x = NULL, 
+    y = "Percentage Achieving ≥7% Growth (%)"
   ) +
+  
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
   scale_fill_brewer(palette = "Set2") +
+  
   theme_minimal() +
-  theme(plot.title = element_text(face = "bold", size = 14),
-        plot.subtitle = element_text(size = 10),
-        strip.text = element_text(face = "bold", size = 11))
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(size = 10)
+  )
 
-ggsave("figure3_performers.png", fig3, width = 12, height = 10, dpi = 300)
-cat("  ✓ Saved: figure3_performers.png\n\n")
+ggsave("figure3_target_achievement.png", fig3, width = 10, height = 6, dpi = 300)
+cat("  ✓ Saved: figure3_target_achievement.png\n\n")
 
 # ----------------------------------------------------------------------------
 # ----------------------------------------------------------------------------
@@ -276,6 +290,7 @@ ggsave("figure5_sdi_vs_growth.png", fig5, width = 14, height = 10, dpi = 300)
 cat("  ✓ Saved: figure5_sdi_vs_growth.png\n\n")
 
 cat("  ✓ Saved: figure5_sdi_vs_growth.png\n\n")
+
 
 
 
