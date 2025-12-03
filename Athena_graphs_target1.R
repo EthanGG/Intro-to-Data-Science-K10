@@ -73,9 +73,8 @@ cat("  Observations with growth data:", nrow(analysis_period), "\n\n")
 cat("Step 3: Creating figures...\n\n")
 
 # ----------------------------------------------------------------------------
-# FIGURE 1: GDP GROWTH TRENDS
+# FIGURE 1: GDP GROWTH TRENDS (with COVID-19 highlight)
 # ----------------------------------------------------------------------------
-
 cat("Creating Figure 1: GDP Growth Trends...\n")
 
 growth_trends <- analysis_period %>%
@@ -86,27 +85,53 @@ growth_trends <- analysis_period %>%
 
 fig1 <- ggplot(growth_trends, aes(x = year, y = avg_growth, 
                                   color = group_label, linetype = group_label)) +
+  # COVID-19 period highlight (2019-2020) - 經濟大幅下降期
+  annotate("rect", 
+           xmin = 2019, xmax = 2020, 
+           ymin = -Inf, ymax = Inf,
+           fill = "gray", alpha = 0.15) +
+  
+  # COVID label
+  annotate("text", 
+           x = 2019.5, y = Inf, 
+           label = "COVID-19", 
+           color = "gray30", 
+           size = 3, 
+           vjust = 1.5, 
+           fontface = "italic") +
+  
+  # Main lines
   geom_line(linewidth = 1.2) +
   geom_point(size = 2.5) +
+  
+  # 7% target line
   geom_hline(yintercept = 7, linetype = "dashed", color = "red", linewidth = 1) +
   annotate("text", x = 2015.5, y = 7.5, label = "7% Target", 
            color = "red", size = 3.5, hjust = 0) +
+  
   facet_wrap(~continent, ncol = 3) +
+  
   labs(
     title = "Figure 1: GDP Per Capita Growth Rates by Continent",
     subtitle = "LDCs vs Non-LDCs (2015-2023) | Red line indicates 7% annual growth target",
-    x = "Year", y = "Average GDP Growth Rate (%)",
-    color = "Country Group", linetype = "Country Group"
+    x = "Year", 
+    y = "Average GDP Growth Rate (%)",
+    color = "Country Group", 
+    linetype = "Country Group"
   ) +
+  
   scale_color_manual(values = c("LDCs" = "#e74c3c", "Non-LDCs" = "#3498db")) +
+  
   theme_minimal() +
-  theme(plot.title = element_text(face = "bold", size = 14),
-        plot.subtitle = element_text(size = 10),
-        legend.position = "bottom", strip.text = element_text(face = "bold"))
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(size = 10),
+    legend.position = "bottom", 
+    strip.text = element_text(face = "bold")
+  )
 
 ggsave("figure1_growth_trends.png", fig1, width = 14, height = 10, dpi = 300)
 cat("  ✓ Saved: figure1_growth_trends.png\n\n")
-
 # ----------------------------------------------------------------------------
 # FIGURE 2: TARGET ACHIEVEMENT
 # ----------------------------------------------------------------------------
@@ -213,7 +238,7 @@ fig6 <- ggplot(growth_box, aes(x = continent, y = gdp_growth_rate, fill = group_
         legend.position = "bottom",
         axis.text.x = element_text(angle = 45, hjust = 1),
         strip.text = element_text(face = "bold")) +
-  coord_cartesian(ylim = c(-10, 10))   # 限制在 -10% ~ 10%
+  coord_cartesian(ylim = c(-10, 10))   
 
 ggsave("figure4_gdpgrowth_boxplot.png", fig6, width = 10, height = 7, dpi = 300)
 cat("  ✓ Saved: figure4_gdpgrowth_boxplot.png\n\n")
@@ -251,6 +276,7 @@ ggsave("figure5_sdi_vs_growth.png", fig5, width = 14, height = 10, dpi = 300)
 cat("  ✓ Saved: figure5_sdi_vs_growth.png\n\n")
 
 cat("  ✓ Saved: figure5_sdi_vs_growth.png\n\n")
+
 
 
 
