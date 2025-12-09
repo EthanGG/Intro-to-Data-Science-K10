@@ -9,6 +9,7 @@
 # install.packages('ggplot2')
 # install.packages('scales')
 # install.packages('maps')
+# install.packages('ggrepel')
 
 # Load required packages
 library(tidyverse)
@@ -17,6 +18,7 @@ library(readr)
 library(ggplot2)
 library(scales)
 library(maps)
+library(ggrepel)
 
 # ============================================================================
 # PART 1: Load Data
@@ -301,7 +303,7 @@ print(ldc_summary)
 cat("\n--- Data Completeness by Continent ---\n")
 data_coverage <- master_data %>%
   group_by(continent) %>%
-  summarise(
+  reframe(
     n_countries = n_distinct(code),
     n_ldc = sum(is_ldc, na.rm = TRUE),
     n_observations = n(),
@@ -317,7 +319,7 @@ print(data_coverage)
 # Check missing values
 cat("\n--- Missing Value Statistics ---\n")
 master_data %>%
-  summarise(
+  reframe(
     total_obs = n(),
     gdp_missing = sum(is.na(gdp_per_capita)),
     neet_missing = sum(is.na(neet_share)),
@@ -332,7 +334,7 @@ master_data %>%
 cat("\n--- Population Coverage for LDCs ---\n")
 ldc_pop_check <- master_data %>%
   filter(is_ldc == TRUE, year >= 2015, year <= 2023) %>%
-  summarise(
+  reframe(
     total_obs = n(),
     pop_available = sum(!is.na(population)),
     pop_coverage_pct = round(pop_available / total_obs * 100, 1)
@@ -384,109 +386,14 @@ cont_master <- cont_master %>%
   mutate(gdp_growth_rate = (gdp_per_capita - lag(gdp_per_capita)) / lag(gdp_per_capita) * 100) %>%
   ungroup()
 
-graph_1 <- ggplot(cont_master, aes(year, gdp_growth_rate, colour = continent)) +
-  theme_minimal() +
-  theme(
-    panel.grid.major = element_line(colour = "grey70"),
-    panel.grid.minor = element_line(colour = "grey90", linewidth = 0.4),
-    legend.position = "bottom",
-    legend.direction = "horizontal",
-    plot.title = element_text(hjust = 0.5)
-  ) +
-  geom_line(linewidth = 1.2) +
-  geom_point(alpha = 0.6) +
-  geom_hline(yintercept = 0, linetype = "dashed", colour = "black", alpha = 0.5) +
-  labs(x = 'Year', y = 'GDP per Capita Growth Rate (%)', colour = 'Continent',
-       title = 'GDP per Capita Growth Rate by Continent')
-
 # 5. NEET change 2010 → 2020 (bar chart)
 neet_change <- master %>%
   filter(year %in% c(2010, 2020)) %>%
   group_by(continent, year) %>%
-  summarise(avg_neet = mean(neet_share, na.rm = T), .groups = 'drop') %>%
+  reframe(avg_neet = mean(neet_share, na.rm = T), .groups = 'drop') %>%
   pivot_wider(names_from = year, values_from = avg_neet, names_prefix = "year_") %>%
   mutate(neet_change = year_2020 - year_2010) %>%
   filter(!is.na(neet_change))
-
-graph2 <- ggplot(neet_change, aes(x = reorder(continent, neet_change), y = neet_change, fill = continent)) +
-  theme_minimal() + 
-  theme(
-    panel.grid.major.x = element_line(colour = "grey70"),
-    panel.grid.minor = element_blank(),
-    legend.position = "bottom",
-    legend.direction = "horizontal",
-    plot.title = element_text(hjust = 0.5)
-  ) +
-  geom_col(alpha = 0.8) +
-  geom_hline(yintercept = 0, linetype = "solid", colour = "black") +
-  coord_flip() +
-  labs(x = 'Continent', y = 'Change in NEET Share (percentage points)', 
-       fill = 'Continent',
-       title = 'NEET Share Change from 2010 to 2020 by Continent')
-
-# 6. GDP per capita vs NEET (scatterplot, coloured by continent)
-graph3 <- ggplot(master, aes(log10(gdp_per_capita), neet_share, colour = continent)) +
-  theme_minimal() + 
-  theme(
-    panel.grid.major = element_line(colour = "grey70"),
-    panel.grid.minor = element_line(colour = "grey90", linewidth = 0.4),
-    legend.position = "bottom",
-    legend.direction = "horizontal",
-    plot.title = element_text(hjust = 0.5)
-  ) +
-  geom_point(alpha = 0.5) +
-  geom_smooth(method = 'lm', se = FALSE, fullrange = TRUE, linewidth = 1.2) +
-  labs(x = 'GDP per Capita (log 10)', y = 'NEET Share (%)', 
-       colour = 'Continent',
-       title = 'Relationship between GDP per Capita and NEET Share')
-
-# 7. Education spending vs NEET (scatterplot)
-graph4 <- ggplot(master, aes(edu_expenditure_gdp, neet_share, colour = continent)) +
-  theme_minimal() + 
-  theme(
-    panel.grid.major = element_line(colour = "grey70"),
-    panel.grid.minor = element_line(colour = "grey90", linewidth = 0.4),
-    legend.position = "bottom",
-    legend.direction = "horizontal",
-    plot.title = element_text(hjust = 0.5)
-  ) +
-  geom_point(alpha = 0.5) +
-  geom_smooth(method = 'lm', se = FALSE, fullrange = TRUE, linewidth = 1.2) +
-  labs(x = 'Education Spending (% of GDP)', y = 'NEET Share (%)', 
-       colour = 'Continent',
-       title = 'Relationship between Education Spending and NEET Share')
-
-# 8. GDP per capita distribution (boxplot)
-graph5 <- ggplot(master, aes(x = continent, y = log10(gdp_per_capita), fill = continent)) +
-  theme_minimal() + 
-  theme(
-    panel.grid.major.x = element_blank(),
-    panel.grid.major.y = element_line(colour = "grey70"),
-    panel.grid.minor = element_line(colour = "grey90", linewidth = 0.4),
-    legend.position = "bottom",
-    legend.direction = "horizontal",
-    plot.title = element_text(hjust = 0.5)
-  ) +
-  geom_boxplot(alpha = 0.7, linewidth = 0.8) +
-  labs(x = 'Continent', y = 'GDP per Capita (log 10)', 
-       fill = 'Continent',
-       title = 'Distribution of GDP per Capita by Continent')
-
-# 9. NEET distribution (boxplot)
-graph6 <- ggplot(master, aes(x = continent, y = neet_share, fill = continent)) +
-  theme_minimal() + 
-  theme(
-    panel.grid.major.x = element_blank(),
-    panel.grid.major.y = element_line(colour = "grey70"),
-    panel.grid.minor = element_line(colour = "grey90", linewidth = 0.4),
-    legend.position = "bottom",
-    legend.direction = "horizontal",
-    plot.title = element_text(hjust = 0.5)
-  ) +
-  geom_boxplot(alpha = 0.7, linewidth = 0.8) +
-  labs(x = 'Continent', y = 'NEET Share (%)', 
-       fill = 'Continent',
-       title = 'Distribution of NEET Share by Continent')
 
 #11: Calculate GDP growth rate for each country, then average by continent
 gdp_growth_data <- master %>%
@@ -495,27 +402,13 @@ gdp_growth_data <- master %>%
   mutate(gdp_growth_rate = (gdp_per_capita - lag(gdp_per_capita)) / lag(gdp_per_capita) * 100) %>%
   ungroup() %>%
   group_by(continent, year) %>%
-  summarise(avg_growth_rate = mean(gdp_growth_rate, na.rm = TRUE), .groups = 'drop')
+  reframe(avg_growth_rate = mean(gdp_growth_rate, na.rm = TRUE), .groups = 'drop')
 
 gdp_growth_data <- gdp_growth_data %>%
   group_by(continent) %>%
   arrange(year) %>%
   mutate(growth_5yr_avg = zoo::rollmean(avg_growth_rate, k = 5, fill = NA, align = "center")) %>%
   ungroup()
-
-graph7 <- ggplot(gdp_growth_data, aes(year, avg_growth_rate, colour = continent)) +
-  theme_minimal() +
-  theme(
-    panel.grid.major = element_line(colour = "grey70"),
-    panel.grid.minor = element_line(colour = "grey90", linewidth = 0.4),
-    legend.position = "bottom",
-    legend.direction = "horizontal",
-    plot.title = element_text(hjust = 0.5)
-  ) +
-  geom_smooth(se = FALSE, linewidth = 1.2, span = 0.3) +
-  geom_hline(yintercept = 0, linetype = "dashed", colour = "black", alpha = 0.5) +
-  labs(x = 'Year', y = 'Average GDP per Capita Growth Rate (%)', colour = 'Continent',
-       title = 'GDP per Capita Growth Rate Trends by Continent')
 
 # ============================================================================
 # DATA ANALYSIS FOR TARGET 1 REPORT
@@ -556,7 +449,7 @@ cat("=== TARGET ACHIEVEMENT (7% threshold) ===\n\n")
 achievement_by_continent <- analysis_period %>%
   filter(is_ldc == TRUE) %>%
   group_by(continent) %>%
-  summarise(
+  reframe(
     n = n(),
     above_7 = sum(gdp_growth_rate >= 7, na.rm = TRUE),
     pct = round(above_7/n * 100, 1)
@@ -568,7 +461,7 @@ print(achievement_by_continent)
 # Overall
 overall <- analysis_period %>%
   filter(is_ldc == TRUE) %>%
-  summarise(
+  reframe(
     total = n(),
     above_7 = sum(gdp_growth_rate >= 7, na.rm = TRUE),
     pct = round(above_7/total * 100, 1)
@@ -585,7 +478,7 @@ cat("\n=== AVERAGE GROWTH BY COUNTRY (2015-2023) ===\n\n")
 country_avg <- analysis_period %>%
   filter(is_ldc == TRUE) %>%
   group_by(country, code) %>%
-  summarise(
+  reframe(
     avg = round(mean(gdp_growth_rate, na.rm = TRUE), 2),
     n = n(),
     .groups = "drop"
@@ -621,7 +514,7 @@ covid_impact <- analysis_period %>%
     year >= 2021 ~ "Post-COVID"
   )) %>%
   group_by(continent, period) %>%
-  summarise(avg = round(mean(gdp_growth_rate, na.rm = TRUE), 1), .groups = "drop")
+  reframe(avg = round(mean(gdp_growth_rate, na.rm = TRUE), 1), .groups = "drop")
 
 # Asia
 cat("Asia:\n")
@@ -636,7 +529,7 @@ cat("\n2020 by continent:\n")
 covid_2020 <- analysis_period %>%
   filter(is_ldc == TRUE, year == 2020) %>%
   group_by(continent) %>%
-  summarise(avg_2020 = round(mean(gdp_growth_rate, na.rm = TRUE), 1))
+  reframe(avg_2020 = round(mean(gdp_growth_rate, na.rm = TRUE), 1))
 print(covid_2020)
 
 # ============================================================================
@@ -657,7 +550,7 @@ country_avg_cont <- country_avg %>%
 within_sd <- country_avg_cont %>%
   filter(!is.na(continent)) %>%
   group_by(continent) %>%
-  summarise(sd = round(sd(avg, na.rm = TRUE), 2))
+  reframe(sd = round(sd(avg, na.rm = TRUE), 2))
 
 cat("Within-continent SD:\n")
 print(within_sd)
@@ -667,7 +560,7 @@ cat("Average:", round(mean(within_sd$sd, na.rm = TRUE), 2), "\n")
 continent_means <- country_avg_cont %>%
   filter(!is.na(continent)) %>%
   group_by(continent) %>%
-  summarise(mean = mean(avg, na.rm = TRUE))
+  reframe(mean = mean(avg, na.rm = TRUE))
 
 between_sd <- sd(continent_means$mean, na.rm = TRUE)
 cat("\nBetween-continent SD:", round(between_sd, 2), "\n")
@@ -681,7 +574,7 @@ cat("\n=== SDI RANGE ===\n\n")
 sdi_stats <- analysis_period %>%
   filter(is_ldc == TRUE, !is.na(sdi_score)) %>%
   group_by(continent) %>%
-  summarise(
+  reframe(
     min = round(min(sdi_score), 2),
     q25 = round(quantile(sdi_score, 0.25), 2),
     median = round(median(sdi_score), 2),
@@ -700,7 +593,7 @@ cat("\n=== NON-LDC GROWTH (Europe & N.America) ===\n\n")
 
 non_ldc <- analysis_period %>%
   filter(is_ldc == FALSE, continent %in% c("Europe", "North America")) %>%
-  summarise(
+  reframe(
     median = round(median(gdp_growth_rate, na.rm = TRUE), 1),
     mean = round(mean(gdp_growth_rate, na.rm = TRUE), 1),
     sd = round(sd(gdp_growth_rate, na.rm = TRUE), 1),
@@ -752,7 +645,7 @@ analysis_data <- master_data %>%
 # Auto-detect available GDP data year range
 gdp_year_range <- analysis_data %>%
   filter(!is.na(gdp_per_capita)) %>%
-  summarise(
+  reframe(
     min_year = min(year, na.rm = TRUE),
     max_year = max(year, na.rm = TRUE)
   )
@@ -785,7 +678,7 @@ cat("Creating Figure 3: GDP Growth Trends by Continent...\n")
 growth_trends <- analysis_period %>%
   filter(!is.na(continent), !is.na(is_ldc), !is.na(population)) %>%
   group_by(continent, is_ldc, year) %>%
-  summarise(
+  reframe(
     # LDCs: Simple average (each country = 1 unit)
     # Non-LDCs: Population-weighted (larger countries have more weight)
     avg_growth = ifelse(
@@ -799,7 +692,7 @@ growth_trends <- analysis_period %>%
   mutate(group_label = ifelse(is_ldc, "LDCs", "Non-LDCs"))
 
 # figure 3
-graph8 <- ggplot(growth_trends, aes(x = year, y = avg_growth, color = group_label)) +
+graph1 <- ggplot(growth_trends, aes(x = year, y = avg_growth, color = group_label)) +
   # COVID-19 period highlight (2019-2020)
   annotate("rect", 
            xmin = 2019, xmax = 2020, 
@@ -854,7 +747,7 @@ graph8 <- ggplot(growth_trends, aes(x = year, y = avg_growth, color = group_labe
     axis.text.x = element_text(size = 12)
   )
 
-ggsave("figure3_growth_trends.png", graph8, width = 14, height = 10, dpi = 300)
+ggsave("figure3_growth_trends.png", graph1, width = 14, height = 10, dpi = 300)
 cat("  ✓ Saved: figure3_growth_trends.png\n")
 cat("    Year range:", year_label, "\n")
 cat("    Method: LDCs (simple avg), Non-LDCs (population-weighted)\n\n")
@@ -867,7 +760,7 @@ growth_box <- analysis_period %>%
   mutate(group_label = ifelse(is_ldc, "LDCs", "Non-LDCs"))
 
 # figure 4
-graph9 <- ggplot(growth_box, aes(x = continent, y = gdp_growth_rate, fill = group_label)) +
+graph2 <- ggplot(growth_box, aes(x = continent, y = gdp_growth_rate, fill = group_label)) +
   geom_boxplot(outlier.alpha = 0.3, width = 0.6,
                position = position_dodge(width = 0.7)) +
   
@@ -898,7 +791,7 @@ graph9 <- ggplot(growth_box, aes(x = continent, y = gdp_growth_rate, fill = grou
   ) +
   coord_cartesian(ylim = c(-10, 10))   
 
-ggsave("figure4_growth_distribution.png", graph9, width = 10, height = 7, dpi = 300)
+ggsave("figure4_growth_distribution.png", graph2, width = 10, height = 7, dpi = 300)
 cat("  ✓ Saved: figure4_growth_distribution.png\n\n")
 
 # ----------------------------------------------------------------------------
@@ -910,12 +803,12 @@ ldc_count_by_continent <- analysis_period %>%
   filter(is_ldc == TRUE) %>%
   distinct(code, continent) %>%
   group_by(continent) %>%
-  summarise(n_ldcs = n_distinct(code), .groups = "drop")
+  reframe(n_ldcs = n_distinct(code), .groups = "drop")
 
 target_achievement <- analysis_period %>%
   filter(!is.na(continent), is_ldc == TRUE) %>%
   group_by(continent) %>%
-  summarise(
+  reframe(
     total_obs = n(),
     above_7pct = sum(gdp_growth_rate >= 7, na.rm = TRUE),
     pct_achieving = round((above_7pct / total_obs) * 100, 1),
@@ -923,7 +816,7 @@ target_achievement <- analysis_period %>%
   ) %>%
   left_join(ldc_count_by_continent, by = "continent")
 
-graph10 <- ggplot(target_achievement, # figure 5 
+graph3 <- ggplot(target_achievement, # figure 5 
                aes(x = reorder(continent, pct_achieving), 
                    y = pct_achieving, 
                    fill = continent)) +
@@ -955,7 +848,7 @@ graph10 <- ggplot(target_achievement, # figure 5
     axis.text.y = element_text(size = 14, face = "bold")
   )
 
-ggsave("figure5_target_achievement.png", graph10, width = 10, height = 6, dpi = 300)
+ggsave("figure5_target_achievement.png", graph3, width = 10, height = 6, dpi = 300)
 cat("  ✓ Saved: figure5_target_achievement.png\n\n")
 
 # ----------------------------------------------------------------------------
@@ -969,8 +862,8 @@ sdi_growth <- analysis_period %>%
   mutate(group_label = ifelse(is_ldc, "LDCs", "Non-LDCs"))
 
 # figure 6
-graph11 <- ggplot(sdi_growth, aes(x = sdi_score, y = gdp_growth_rate, 
-                               color = group_label)) +
+graph4 <- ggplot(sdi_growth, aes(x = sdi_score, y = gdp_growth_rate, 
+  color = group_label)) +
   geom_point(alpha = 0.4, size = 2.5) +
   geom_smooth(method = "lm", se = TRUE, linewidth = 1.3) +
   
@@ -1002,7 +895,7 @@ graph11 <- ggplot(sdi_growth, aes(x = sdi_score, y = gdp_growth_rate,
   ) +
   coord_cartesian(ylim = c(-10, 10))  
 
-ggsave("figure6_sdi_vs_growth.png", graph11, width = 14, height = 10, dpi = 300)
+ggsave("figure6_sdi_vs_growth.png", graph4, width = 14, height = 10, dpi = 300)
 cat("  ✓ Saved: figure6_sdi_vs_growth.png\n\n")
 
 # List of LDCs (as of recent UN classification)
@@ -1053,63 +946,10 @@ countries_ldc_status <- countries_ldc_status %>%
 map_data_ldc <- world_map %>%
   left_join(countries_ldc_status, by = "region")
 
-# Create heatmap
-graph12 <- ggplot(map_data_ldc, aes(x = long, y = lat, group = group, fill = ldc_status)) +
-  geom_polygon(color = "white", linewidth = 0.1) +
-  scale_fill_manual(
-    values = c(
-      "LDC" = "#b2182b",
-      "Non-LDC" = "#2166ac"
-    ),
-    na.value = "grey90"
-  ) +
-  theme_minimal() +
-  theme(
-    panel.grid = element_blank(),
-    axis.text = element_blank(),
-    axis.title = element_blank(),
-    axis.ticks = element_blank(),
-    legend.position = "bottom",
-    legend.direction = "horizontal",
-    plot.title = element_text(hjust = 0, face = "bold")
-  ) +
-  coord_fixed(1.3) +
-  labs(
-    fill = "Country Status",
-    title = "Global Distribution of Least Developed Countries (LDCs)"
-  )
-
-# Alternative: Show only LDCs highlighted
-graph13 <- ggplot(map_data_ldc, aes(x = long, y = lat, group = group, fill = is_ldc)) +
-  geom_polygon(color = "white", linewidth = 0.1) +
-  scale_fill_manual(
-    values = c(
-      "TRUE" = "#b2182b",
-      "FALSE" = "grey90"
-    ),
-    labels = c("Non-LDC", "LDC"),
-    na.value = "grey90"
-  ) +
-  theme_minimal() +
-  theme(
-    panel.grid = element_blank(),
-    axis.text = element_blank(),
-    axis.title = element_blank(),
-    axis.ticks = element_blank(),
-    legend.position = "bottom",
-    legend.direction = "horizontal",
-    plot.title = element_text(hjust = 0, face = "bold")
-  ) +
-  coord_fixed(1.3) +
-  labs(
-    fill = "",
-    title = "Least Developed Countries (LDCs) Worldwide"
-  )
-
 # Summary statistics
 ldc_summary <- countries_ldc_status %>%
   group_by(continent, ldc_status) %>%
-  summarise(n_countries = n(), .groups = 'drop') %>%
+  reframe(n_countries = n(), .groups = 'drop') %>%
   pivot_wider(names_from = ldc_status, values_from = n_countries, values_fill = 0)
 
 print("\nLDC distribution by continent:")
@@ -1118,19 +958,249 @@ print(ldc_summary)
 # Save
 write_csv(countries_ldc_status, "ldc_status_by_country.csv")
 
-# Calculate population-weighted NEET for baseline and recent periods by continent
-country_target_achievement <- analysis_period %>%
-  select(country, continent, year, is_ldc, population, neet_share) %>%
-  rename(recent_neet = neet_share) %>% mutate(baseline_neet = T) %>%
-  group_by(country) %>% mutate(pct_change_neet =
-    case_when(is.na(lag(recent_neet)) ~ 0,
-      !is.na(lag(recent_neet)) ~ ((recent_neet - lag(recent_neet)) * 100) / lag(recent_neet))
+# # Step 1: Get ALL countries from master dataset (2010-2021) with their most recent population
+# all_countries_with_pop <- master %>%
+#   filter(year >= 2010 & year <= 2021) %>%
+#   group_by(country, continent) %>%
+#   arrange(desc(year)) %>%
+#   reframe(
+#     most_recent_pop = first(population[!is.na(population)]),
+#     .groups = 'drop'
+#   ) %>%
+#   filter(!is.na(most_recent_pop))  # Only keep countries with at least some population data
+# 
+# # Step 2: Calculate NEET change for countries WITH data
+# neet_country_change <- master %>%
+#   filter(!is.na(neet_share)) %>%
+#   group_by(country, continent) %>%
+#   arrange(year) %>%
+#   reframe(
+#     baseline_neet = first(neet_share[year >= 2010 & year <= 2015]),
+#     baseline_year = first(year[year >= 2010 & year <= 2015]),
+#     baseline_pop = first(population[year >= 2010 & year <= 2015 & !is.na(population)]),
+#     recent_neet = ifelse(
+#       any(year == 2018 & !is.na(neet_share)),
+#       neet_share[year == 2018][1],
+#       last(neet_share[year >= 2016 & year < 2018])
+#     ),
+#     recent_year = ifelse(
+#       any(year == 2018 & !is.na(neet_share)),
+#       2018,
+#       last(year[year >= 2016 & year < 2018])
+#     ),
+#     recent_pop = ifelse(
+#       any(year == 2018 & !is.na(population)),
+#       population[year == 2018][1],
+#       last(population[year >= 2016 & year < 2018 & !is.na(population)])
+#     ),
+#     .groups = 'drop'
+#   ) %>%
+#   mutate(
+#     pct_change_neet = ifelse(!is.na(baseline_neet) & !is.na(recent_neet),
+#                              ((recent_neet - baseline_neet) / baseline_neet) * 100,
+#                              NA_real_),
+#     target_reduction = case_when(
+#       is.na(baseline_neet) ~ NA_real_,
+#       baseline_neet < 10 ~ -10,
+#       baseline_neet >= 10 & baseline_neet <= 30 ~ -20,
+#       baseline_neet > 30 ~ -10,
+#       TRUE ~ NA_real_
+#     ),
+#     target_status = case_when(
+#       is.na(baseline_neet) | is.na(recent_neet) ~ "No Data",
+#       pct_change_neet <= target_reduction ~ "Achieved",
+#       TRUE ~ "Missed"
+#     )
+#   )
+# 
+# # Step 3: Join ALL countries with NEET change results
+# countries_complete <- all_countries_with_pop %>%
+#   left_join(
+#     neet_country_change %>% select(country, target_status, recent_pop),
+#     by = "country"
+#   ) %>%
+#   mutate(
+#     target_status = ifelse(is.na(target_status), "No Data", target_status),
+#     pop_for_calculation = coalesce(recent_pop, most_recent_pop)
+#   )
+# 
+# # Step 4: Calculate total population by continent (including No Data countries)
+# continent_total_pop <- countries_complete %>%
+#   group_by(continent) %>%
+#   mutate(total_continent_pop = sum(pop_for_calculation, na.rm = TRUE))
+# 
+# # Step 5: Calculate population-weighted percentages INCLUDING "No Data"
+# population_weighted_summary_complete <- countries_complete %>%
+#   left_join(continent_total_pop, by = "country") %>%
+#   rename(pop_for_calculation = pop_for_calculation.x) %>%
+#   group_by(continent.x, target_status.x) %>%
+#   mutate(
+#     total_pop_in_category = sum(pop_for_calculation, na.rm = TRUE),
+#     total_continent_pop = first(total_continent_pop),
+#   ) %>%
+#   mutate(
+#     percentage = (total_pop_in_category / total_continent_pop) * 100
+#   )
+# 
+# print(population_weighted_summary_complete)
+# 
+# print("Population-weighted target achievement by continent (including No Data):")
+# print(population_weighted_summary_complete)
+# 
+# # Step 6: Create stacked bar chart with all three categories
+# # ggplot(population_weighted_summary_complete, aes(x = continent, y = percentage, fill = target_status.y)) +
+# #   geom_col(position = "stack", alpha = 0.8) +
+# #   scale_fill_manual(
+# #     values = c(
+# #       "Achieved" = "#2166ac",
+# #       "Missed" = "#b2182b",
+# #       "No Data" = "grey80"
+# #     )
+# #   ) +
+# #   theme_minimal() +
+# #   theme(
+# #     panel.grid.major.x = element_blank(),
+# #     panel.grid.major.y = element_line(colour = "grey70"),
+# #     panel.grid.minor = element_line(colour = "grey90", linewidth = 0.4),
+# #     legend.position = "bottom",
+# #     legend.direction = "horizontal",
+# #     plot.title = element_text(hjust = 0.5),
+# #     axis.text.x = element_text(angle = 45, hjust = 1)
+# #   ) +
+# #   labs(
+# #     x = "Continent",
+# #     y = "Percentage of Total Population (%)",
+# #     fill = "Target Achievement",
+# #     title = "NEET Reduction Target Achievement by Continent (Population-Weighted)",
+# #     subtitle = "Target: <10% → 10% reduction | 10-30% → 20% reduction | >30% → 10% reduction\n(Including all countries with population data)"
+# #   ) +
+# #   geom_text(
+# #     aes(label = ifelse(percentage > 5, paste0(round(percentage, 1), "%"), "")),
+# #     position = position_stack(vjust = 0.5),
+# #     color = "white",
+# #     fontface = "bold",
+# #     size = 3
+# #   )
+
+# Step 1: Get ALL countries with continent info (don't filter out NAs yet)
+neet_population_weighted <- master %>%
+  group_by(country, continent) %>%
+  arrange(year) %>%
+  reframe(
+    # Baseline period (2010-2015)
+    baseline_neet = last(neet_share[year >= 2010 & year <= 2015 & !is.na(neet_share)]),
+    baseline_year = last(year[year >= 2010 & year <= 2015 & !is.na(neet_share)]),
+    baseline_pop = last(population[year >= 2010 & year <= 2015 & !is.na(population) & !is.na(neet_share)]),
+    # Recent period (2016-2020)
+    recent_neet = ifelse(
+      any(year == 2020 & !is.na(neet_share)),
+      neet_share[year == 2020 & !is.na(neet_share)][1],
+      last(neet_share[year >= 2016 & year < 2020 & !is.na(neet_share)])
+    ),
+    recent_year = ifelse(
+      any(year == 2020 & !is.na(neet_share)),
+      2020,
+      last(year[year >= 2016 & year < 2020 & !is.na(neet_share)])
+    ),
+    recent_pop = ifelse(
+      any(year == 2020 & !is.na(population) & !is.na(neet_share)),
+      population[year == 2020 & !is.na(neet_share)][1],
+      last(population[year >= 2016 & year < 2020 & !is.na(neet_share)])
+    ),
+    .groups = 'drop'
+  )
+# REMOVED the filter here - keep all countries including those with NA
+
+# Step 2: Calculate percentage change and determine target for each country
+country_target_achievement <- neet_population_weighted %>%
+  mutate(
+    pct_change_neet = ifelse(!is.na(baseline_neet) & !is.na(recent_neet),
+                             ((recent_neet - baseline_neet) / baseline_neet) * 100,
+                             NA_real_),
+    # Determine target based on baseline NEET
+    target_reduction = case_when(
+      is.na(baseline_neet) ~ NA_real_,
+      baseline_neet < 10 ~ -10,
+      baseline_neet >= 10 & baseline_neet <= 30 ~ -20,
+      baseline_neet > 30 ~ -10,
+      TRUE ~ NA_real_
+    ),
+    # Determine if target was achieved
+    target_status = case_when(
+      is.na(baseline_neet) | is.na(recent_neet) | is.na(baseline_pop) | is.na(recent_pop) ~ "No Data",
+      pct_change_neet <= target_reduction ~ "Achieved",
+      TRUE ~ "Missed"
+    )
   )
 
+# Step 3: For "No Data" countries, we need to estimate their population
+# Use the most recent available population data
+country_target_achievement <- country_target_achievement %>%
+  mutate(
+    pop_for_calculation = coalesce(recent_pop, baseline_pop)
+  )
+
+# Step 3: Calculate total population by continent (including No Data countries)
+continent_total_pop <- country_target_achievement %>%
+  group_by(continent) %>%
+  reframe(total_continent_pop = sum(pop_for_calculation, na.rm = TRUE), .groups = 'drop')
+
+# Step 4: Calculate population-weighted percentages by target status for each continent
+population_weighted_summary <- country_target_achievement %>%
+  left_join(continent_total_pop, by = "continent") %>%
+  group_by(continent, target_status) %>%
+  reframe(
+    total_pop_in_category = sum(pop_for_calculation, na.rm = TRUE),
+    total_continent_pop = first(total_continent_pop),
+    .groups = 'drop'
+  ) %>%
+  mutate(
+    percentage = (total_pop_in_category / total_continent_pop) * 100
+  )
+
+print("Population-weighted target achievement by continent:")
+print(population_weighted_summary)
+
+# Step 5: Create stacked bar chart
+graph6 <- ggplot(population_weighted_summary, aes(x = continent, y = percentage, fill = target_status)) +
+  geom_col(position = "stack", alpha = 0.8) +
+  scale_fill_manual(
+    values = c(
+      "Achieved" = "#2166ac",
+      "Missed" = "#b2182b",
+      "No Data" = "grey80"
+    )
+  ) +
+  theme_minimal() +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.major.y = element_line(colour = "grey70"),
+    panel.grid.minor = element_line(colour = "grey90", linewidth = 0.4),
+    legend.position = "bottom",
+    legend.direction = "horizontal",
+    plot.title = element_text(hjust = 0.5),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  labs(
+    x = "Continent",
+    y = "Percentage of Population (%)",
+    fill = "Target Achievement",
+    title = "NEET Reduction Target Achievement by Continent (Population-Weighted)",
+    subtitle = "Target: <10% → 10% reduction | 10-30% → 15% reduction | >30% → 10% reduction"
+  ) +
+  geom_text(
+    aes(label = ifelse(percentage > 5, paste0(round(percentage, 1), "%"), "")),
+    position = position_stack(vjust = 0.5),
+    color = "white",
+    fontface = "bold",
+    size = 3
+  )
+
+# Calculate population-weighted NEET for baseline and recent periods by continent
 continent_neet_weighted <- country_target_achievement %>%
   filter(!is.na(baseline_neet) & !is.na(recent_neet)) %>%  # Only countries with both baseline and recent data
   group_by(continent) %>%
-  summarise(
+  reframe(
     # Population-weighted NEET values
     baseline_weighted_neet = sum(baseline_neet * baseline_pop, na.rm = TRUE) / sum(baseline_pop, na.rm = TRUE),
     recent_weighted_neet = sum(recent_neet * recent_pop, na.rm = TRUE) / sum(recent_pop, na.rm = TRUE),
@@ -1142,9 +1212,9 @@ continent_neet_weighted <- country_target_achievement %>%
   )
 
 # Create bar chart
-graph14 <- ggplot(continent_neet_weighted, aes(x = reorder(continent, -weighted_neet_change), 
-                                    y = weighted_neet_change, 
-                                    fill = weighted_neet_change < 0)) +
+graph7 <- ggplot(continent_neet_weighted, aes(x = reorder(continent, -weighted_neet_change), 
+    y = weighted_neet_change, 
+    fill = weighted_neet_change < 0)) +
   geom_col(alpha = 0.8) +
   geom_hline(yintercept = 0, linetype = "solid", color = "black") +
   geom_text(aes(label = paste0(round(weighted_neet_change, 1), "%")), 
@@ -1204,7 +1274,7 @@ yoy_neet_change <- master %>%
 # Only includes countries with consecutive year data
 global_yoy_weighted <- yoy_neet_change %>%
   group_by(year) %>%
-  summarise(
+  reframe(
     total_pop = sum(population, na.rm = TRUE),
     weighted_yoy_pct_change = sum(yoy_pct_change * population, na.rm = TRUE) / sum(population, na.rm = TRUE),
     n_countries = n(),
@@ -1214,7 +1284,7 @@ global_yoy_weighted <- yoy_neet_change %>%
 
 # Overall global mean YoY percentage change across all years
 global_mean_yoy_pct <- yoy_neet_change %>%
-  summarise(
+  reframe(
     # Simple average (unweighted)
     mean_yoy_pct_change_unweighted = mean(yoy_pct_change, na.rm = TRUE),
     
@@ -1236,7 +1306,7 @@ print(global_yoy_weighted)
 # Show which countries have consecutive year data
 countries_with_consecutive <- yoy_neet_change %>%
   group_by(country, continent) %>%
-  summarise(
+  reframe(
     n_consecutive_pairs = n(),
     mean_yoy_pct = mean(yoy_pct_change, na.rm = TRUE),
     .groups = 'drop'
@@ -1246,29 +1316,10 @@ countries_with_consecutive <- yoy_neet_change %>%
 print("\nCountries with consecutive year data:")
 print(head(countries_with_consecutive, 20))
 
-# Visualize global YoY percentage trend
-graph15 <- ggplot(global_yoy_weighted, aes(x = year, y = weighted_yoy_pct_change)) +
-  geom_line(linewidth = 1.2, color = "#2166ac") +
-  geom_point(size = 3, color = "#2166ac") +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
-  theme_minimal() +
-  theme(
-    panel.grid.major = element_line(colour = "grey70"),
-    panel.grid.minor = element_line(colour = "grey90", linewidth = 0.4),
-    plot.title = element_text(hjust = 0.5)
-  ) +
-  labs(
-    x = "Year",
-    y = "Population-Weighted YoY NEET Change (%)",
-    title = "Global Year-over-Year NEET Percentage Change (Population-Weighted)",
-    subtitle = "Only includes consecutive year comparisons\nNegative values indicate improvement"
-  ) +
-  geom_text(aes(label = n_countries), vjust = -1, size = 3, color = "grey50")
-
 # Calculate by continent (consecutive years only)
 continent_yoy_pct <- yoy_neet_change %>%
   group_by(continent) %>%
-  summarise(
+  reframe(
     mean_yoy_pct_change_weighted = sum(yoy_pct_change * population, na.rm = TRUE)
       / sum(population, na.rm = TRUE),
     mean_yoy_pct_change_unweighted = mean(yoy_pct_change, na.rm = TRUE),
@@ -1294,7 +1345,7 @@ neet_country_change <- master %>%
   filter(!is.na(neet_share)) %>%
   group_by(country) %>%
   arrange(year) %>%
-  summarise(
+  reframe(
     baseline_neet = first(neet_share[year >= 2010 & year <= 2015]),
     baseline_year = first(year[year >= 2010 & year <= 2015]),
     recent_neet = ifelse(
@@ -1306,8 +1357,7 @@ neet_country_change <- master %>%
       any(year == 2018 & !is.na(neet_share)),
       2018,
       last(year[year >= 2016 & year < 2018])
-    ),
-    .groups = 'drop'
+    )
   ) %>%
   filter(!is.na(baseline_neet) & !is.na(recent_neet)) %>%
   mutate(neet_pct_change = ((recent_neet - baseline_neet) / baseline_neet) * 100)
@@ -1329,7 +1379,7 @@ map_data_joined <- world_map %>%
   left_join(neet_country_change, by = "region")
 
 # Create the map
-graph16 <- ggplot(map_data_joined, aes(x = long, y = lat, group = group, fill = neet_pct_change)) +
+graph8 <- ggplot(map_data_joined, aes(x = long, y = lat, group = group, fill = neet_pct_change)) +
   geom_polygon(color = "white", linewidth = 0.1) +
   scale_fill_gradient2(
     low = "#2166ac",
@@ -1363,7 +1413,7 @@ all_countries_with_pop <- master %>%
   filter(year >= 2010 & year <= 2021) %>%
   group_by(country, continent) %>%
   arrange(desc(year)) %>%
-  summarise(
+  reframe(
     most_recent_pop = first(population[!is.na(population)]),
     .groups = 'drop'
   ) %>%
@@ -1374,7 +1424,7 @@ neet_country_change <- master %>%
   filter(!is.na(neet_share)) %>%
   group_by(country, continent) %>%
   arrange(year) %>%
-  summarise(
+  reframe(
     baseline_neet = first(neet_share[year >= 2010 & year <= 2015]),
     baseline_year = first(year[year >= 2010 & year <= 2015]),
     baseline_pop = first(population[year >= 2010 & year <= 2015 & !is.na(population)]),
@@ -1427,14 +1477,14 @@ countries_complete <- all_countries_with_pop %>%
 # Step 4: Calculate total population by continent (including No Data countries)
 continent_total_pop <- countries_complete %>%
   group_by(continent) %>%
-  summarise(total_continent_pop = sum(pop_for_calculation, na.rm = TRUE), .groups = 'drop')
+  mutate(total_continent_pop = sum(pop_for_calculation, na.rm = TRUE))
 
 # Step 5: Calculate population-weighted percentages INCLUDING "No Data"
 population_weighted_summary_complete <- countries_complete %>%
-  left_join(continent_total_pop, by = "continent") %>%
-  group_by(continent, target_status) %>%
-  summarise(
-    total_pop_in_category = sum(pop_for_calculation, na.rm = TRUE),
+  left_join(continent_total_pop, by = "country") %>%
+  group_by(continent.x, target_status.x) %>%
+  reframe(
+    total_pop_in_category = sum(pop_for_calculation.x, na.rm = TRUE),
     total_continent_pop = first(total_continent_pop),
     .groups = 'drop'
   ) %>%
@@ -1445,47 +1495,12 @@ population_weighted_summary_complete <- countries_complete %>%
 print(population_weighted_summary_complete)
 
 # Step 6: Create stacked bar chart with all three categories
-graph17 <- ggplot(population_weighted_summary_complete, aes(x = continent, y = percentage, fill = target_status)) +
-  geom_col(position = "stack", alpha = 0.8) +
-  scale_fill_manual(
-    values = c(
-      "Achieved" = "#2166ac",
-      "Missed" = "#b2182b",
-      "No Data" = "grey80"
-    )
-  ) +
-  theme_minimal() +
-  theme(
-    panel.grid.major.x = element_blank(),
-    panel.grid.major.y = element_line(colour = "grey70"),
-    panel.grid.minor = element_line(colour = "grey90", linewidth = 0.4),
-    legend.position = "bottom",
-    legend.direction = "horizontal",
-    plot.title = element_text(hjust = 0, face = "bold", size = 16),
-    plot.subtitle = element_text(size = 14),
-    axis.text.x = element_text(angle = 45, hjust = 1)
-  ) +
-  labs(
-    x = "Continent",
-    y = "Percentage of Total Population (%)",
-    fill = "Target Achievement",
-    title = "Figure 9: NEET Reduction Target Achievement",
-    subtitle = "Population Weighted Continent level comparison (EXCLUDING COVID YEARS)"
-  ) +
-  geom_text(
-    aes(label = ifelse(percentage > 5, paste0(round(percentage, 1), "%"), "")),
-    position = position_stack(vjust = 0.5),
-    color = "white",
-    fontface = "bold",
-    size = 3
-  )
-
 
 # Calculate percentage of NA for NEET data (2010-2021)
 neet_na_analysis <- master %>%
   filter(year >= 2010 & year <= 2021) %>%
   group_by(continent) %>%
-  summarise(
+  reframe(
     total_observations = n(),
     neet_na_count = sum(is.na(neet_share)),
     neet_available_count = sum(!is.na(neet_share)),
@@ -1495,12 +1510,10 @@ neet_na_analysis <- master %>%
   )
 
 
-view(neet_na_analysis)
-
 # Overall global statistics
 global_neet_na <- master %>%
   filter(year >= 2010 & year <= 2021) %>%
-  summarise(
+  reframe(
     total_observations = n(),
     neet_na_count = sum(is.na(neet_share)),
     neet_available_count = sum(!is.na(neet_share)),
@@ -1515,7 +1528,7 @@ print(global_neet_na)
 neet_na_by_year <- master %>%
   filter(year >= 2010 & year <= 2021) %>%
   group_by(year) %>%
-  summarise(
+  reframe(
     total_countries = n(),
     neet_na_count = sum(is.na(neet_share)),
     neet_available_count = sum(!is.na(neet_share)),
@@ -1525,42 +1538,6 @@ neet_na_by_year <- master %>%
 
 print("\nNEET data availability by year (2010-2021):")
 print(neet_na_by_year)
-
-# Visualize NA percentage by continent
-graph18 <- ggplot(neet_na_analysis, aes(x = reorder(continent, -neet_na_percentage), y = neet_na_percentage, fill = continent)) +
-  geom_col(alpha = 0.8) +
-  geom_text(aes(label = paste0(neet_na_percentage, "%")), vjust = -0.5, fontface = "bold") +
-  theme_minimal() +
-  theme(
-    panel.grid.major.x = element_blank(),
-    panel.grid.major.y = element_line(colour = "grey70"),
-    panel.grid.minor = element_line(colour = "grey90", linewidth = 0.4),
-    legend.position = "none",
-    plot.title = element_text(hjust = 0.5),
-    axis.text.x = element_text(angle = 45, hjust = 1)
-  ) +
-  labs(
-    x = "Continent",
-    y = "Missing NEET Data (%)",
-    title = "Percentage of Missing NEET Data by Continent (2010-2021)"
-  )
-
-# Visualize NA percentage by year
-graph19 <- ggplot(neet_na_by_year, aes(x = year, y = neet_na_percentage)) +
-  geom_line(linewidth = 1.2, color = "#b2182b") +
-  geom_point(size = 3, color = "#b2182b") +
-  theme_minimal() +
-  theme(
-    panel.grid.major = element_line(colour = "grey70"),
-    panel.grid.minor = element_line(colour = "grey90", linewidth = 0.4),
-    plot.title = element_text(hjust = 0.5)
-  ) +
-  labs(
-    x = "Year",
-    y = "Missing NEET Data (%)",
-    title = "Trend of Missing NEET Data Over Time (2010-2021)"
-  ) +
-  scale_x_continuous(breaks = 2010:2021)
 
 # Calculate how close each country is to their target
 # Filter for countries that DON'T have 2015 OR DON'T have 2020
@@ -1578,7 +1555,6 @@ closest_5_countries_missing_data <- country_target_achievement %>%
   head(5)
 
 print("Top 5 countries closest to their target (missing 2015 OR 2020 data):")
-view(closest_5_countries_missing_data)
 
 # Find countries closest to 10% or 30% NEET
 countries_near_thresholds <- country_target_achievement %>%
@@ -1594,9 +1570,6 @@ countries_near_thresholds <- country_target_achievement %>%
   arrange(distance_from_threshold) %>%
   select(country, continent, baseline_year, baseline_neet, closest_threshold, distance_from_threshold) %>%
   head(10)
-
-print("Top 10 countries with NEET closest to 10% or 30%:")
-view(countries_near_thresholds)
 
 # Separate by threshold
 closest_to_10 <- country_target_achievement %>%
@@ -1624,133 +1597,11 @@ write_csv(countries_near_thresholds, "countries_near_10_or_30_threshold.csv")
 write_csv(closest_to_10, "countries_closest_to_10_percent.csv")
 write_csv(closest_to_30, "countries_closest_to_30_percent.csv")
 
-# Step 1: Get ALL countries from master dataset (2010-2021) with their most recent population
-all_countries_with_pop <- master %>%
-  filter(year >= 2010 & year <= 2021) %>%
-  group_by(country, continent) %>%
-  arrange(desc(year)) %>%
-  summarise(
-    most_recent_pop = first(population[!is.na(population)]),
-    .groups = 'drop'
-  ) %>%
-  filter(!is.na(most_recent_pop))  # Only keep countries with at least some population data
-
-# Step 2: Calculate NEET change for countries WITH data
-neet_country_change <- master %>%
-  filter(!is.na(neet_share)) %>%
-  group_by(country, continent) %>%
-  arrange(year) %>%
-  summarise(
-    baseline_neet = first(neet_share[year >= 2010 & year <= 2015]),
-    baseline_year = first(year[year >= 2010 & year <= 2015]),
-    baseline_pop = first(population[year >= 2010 & year <= 2015 & !is.na(population)]),
-    recent_neet = ifelse(
-      any(year == 2018 & !is.na(neet_share)),
-      neet_share[year == 2018][1],
-      last(neet_share[year >= 2016 & year < 2018])
-    ),
-    recent_year = ifelse(
-      any(year == 2018 & !is.na(neet_share)),
-      2018,
-      last(year[year >= 2016 & year < 2018])
-    ),
-    recent_pop = ifelse(
-      any(year == 2018 & !is.na(population)),
-      population[year == 2018][1],
-      last(population[year >= 2016 & year < 2018 & !is.na(population)])
-    ),
-    .groups = 'drop'
-  ) %>%
-  mutate(
-    pct_change_neet = ifelse(!is.na(baseline_neet) & !is.na(recent_neet),
-                             ((recent_neet - baseline_neet) / baseline_neet) * 100,
-                             NA_real_),
-    target_reduction = case_when(
-      is.na(baseline_neet) ~ NA_real_,
-      baseline_neet < 10 ~ -10,
-      baseline_neet >= 10 & baseline_neet <= 30 ~ -20,
-      baseline_neet > 30 ~ -10,
-      TRUE ~ NA_real_
-    ),
-    target_status = case_when(
-      is.na(baseline_neet) | is.na(recent_neet) ~ "No Data",
-      pct_change_neet <= target_reduction ~ "Achieved",
-      TRUE ~ "Missed"
-    )
-  )
-
-# Step 3: Join ALL countries with NEET change results
-countries_complete <- all_countries_with_pop %>%
-  left_join(
-    neet_country_change %>% select(country, target_status, recent_pop),
-    by = "country"
-  ) %>%
-  mutate(
-    target_status = ifelse(is.na(target_status), "No Data", target_status),
-    pop_for_calculation = coalesce(recent_pop, most_recent_pop)
-  )
-
-# Step 4: Calculate total population by continent (including No Data countries)
-continent_total_pop <- countries_complete %>%
-  group_by(continent) %>%
-  summarise(total_continent_pop = sum(pop_for_calculation, na.rm = TRUE), .groups = 'drop')
-
-# Step 5: Calculate population-weighted percentages INCLUDING "No Data"
-population_weighted_summary_complete <- countries_complete %>%
-  left_join(continent_total_pop, by = "continent") %>%
-  group_by(continent, target_status) %>%
-  summarise(
-    total_pop_in_category = sum(pop_for_calculation, na.rm = TRUE),
-    total_continent_pop = first(total_continent_pop),
-    .groups = 'drop'
-  ) %>%
-  mutate(
-    percentage = (total_pop_in_category / total_continent_pop) * 100
-  )
-
-print(population_weighted_summary_complete)
-
-# Step 6: Create stacked bar chart with all three categories
-graph20 <- ggplot(population_weighted_summary_complete, aes(x = continent, y = percentage, fill = target_status)) +
-  geom_col(position = "stack", alpha = 0.8) +
-  scale_fill_manual(
-    values = c(
-      "Achieved" = "#2166ac",
-      "Missed" = "#b2182b",
-      "No Data" = "grey80"
-    )
-  ) +
-  theme_minimal() +
-  theme(
-    panel.grid.major.x = element_blank(),
-    panel.grid.major.y = element_line(colour = "grey70"),
-    panel.grid.minor = element_line(colour = "grey90", linewidth = 0.4),
-    legend.position = "bottom",
-    legend.direction = "horizontal",
-    plot.title = element_text(hjust = 0.5),
-    axis.text.x = element_text(angle = 45, hjust = 1)
-  ) +
-  labs(
-    x = "Continent",
-    y = "Percentage of Total Population (%)",
-    fill = "Target Achievement",
-    title = "NEET Reduction Target Achievement by Continent (Population-Weighted)",
-    subtitle = "Target: <10% → 10% reduction | 10-30% → 15% reduction | >30% → 10% reduction\n(Including all countries with population data)"
-  ) +
-  geom_text(
-    aes(label = ifelse(percentage > 5, paste0(round(percentage, 1), "%"), "")),
-    position = position_stack(vjust = 0.5),
-    color = "white",
-    fontface = "bold",
-    size = 3
-  )
-
-
 # Calculate percentage of NA for NEET data (2010-2021)
 neet_na_analysis <- master %>%
   filter(year >= 2010 & year <= 2021) %>%
   group_by(continent) %>%
-  summarise(
+  reframe(
     total_observations = n(),
     neet_na_count = sum(is.na(neet_share)),
     neet_available_count = sum(!is.na(neet_share)),
@@ -1759,13 +1610,10 @@ neet_na_analysis <- master %>%
     .groups = 'drop'
   )
 
-
-view(neet_na_analysis)
-
 # Overall global statistics
 global_neet_na <- master %>%
   filter(year >= 2010 & year <= 2021) %>%
-  summarise(
+  reframe(
     total_observations = n(),
     neet_na_count = sum(is.na(neet_share)),
     neet_available_count = sum(!is.na(neet_share)),
@@ -1780,7 +1628,7 @@ print(global_neet_na)
 neet_na_by_year <- master %>%
   filter(year >= 2010 & year <= 2021) %>%
   group_by(year) %>%
-  summarise(
+  reframe(
     total_countries = n(),
     neet_na_count = sum(is.na(neet_share)),
     neet_available_count = sum(!is.na(neet_share)),
@@ -1788,41 +1636,263 @@ neet_na_by_year <- master %>%
     .groups = 'drop'
   )
 
-print("\nNEET data availability by year (2010-2021):")
-print(neet_na_by_year)
+# Prepare data for box plot - remove missing NEET values
+neet_continent_data <- master_data %>%
+  filter(!is.na(neet_share), !is.na(continent))
 
-# Visualize NA percentage by continent
-graph21 <- ggplot(neet_na_analysis, aes(x = reorder(continent, -neet_na_percentage), y = neet_na_percentage, fill = continent)) +
-  geom_col(alpha = 0.8) +
-  geom_text(aes(label = paste0(neet_na_percentage, "%")), vjust = -0.5, fontface = "bold") +
+# Create the box plot
+graph9 <- ggplot(neet_continent_data, aes(x = continent, y = neet_share, fill = continent)) +
+  geom_boxplot(outlier.shape = 16, outlier.size = 2, alpha = 0.7) +
+  
+  # Customize colors to match the reference style
+  scale_fill_manual(values = c(
+    "Africa" = "#D55E00",
+    "Asia" = "#E6AB02", 
+    "Europe" = "#009E73",
+    "North America" = "#56B4E9",
+    "Oceania" = "#0072B2",
+    "South America" = "#CC79A7"
+  )) +
+  
+  # Labels and theme
+  labs(
+    title = "Box Plot: NEET Distribution by Continent",
+    x = "Continent",
+    y = "Share of Youth Not in Education,\nEmployment or Training (%)",
+    fill = "continent"
+  ) +
+  
+  # Clean theme matching the reference style
   theme_minimal() +
   theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.title.x = element_text(size = 12, face = "bold"),
+    axis.title.y = element_text(size = 12, face = "bold"),
+    axis.text = element_text(size = 10),
+    legend.position = "bottom",
+    legend.title = element_text(size = 10, face = "bold"),
+    legend.text = element_text(size = 9),
     panel.grid.major.x = element_blank(),
-    panel.grid.major.y = element_line(colour = "grey70"),
-    panel.grid.minor = element_line(colour = "grey90", linewidth = 0.4),
-    legend.position = "none",
-    plot.title = element_text(hjust = 0.5),
-    axis.text.x = element_text(angle = 45, hjust = 1)
+    panel.grid.minor = element_blank(),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5)
   ) +
-  labs(
-    x = "Continent",
-    y = "Missing NEET Data (%)",
-    title = "Percentage of Missing NEET Data by Continent (2010-2021)"
+  
+  # Arrange legend items horizontally
+  guides(fill = guide_legend(nrow = 1))
+
+# Save the plot
+ggsave("neet_boxplot_by_continent.png", width = 10, height = 7, dpi = 300)
+
+# Print summary statistics
+cat("\n=== NEET Distribution Summary by Continent ===\n\n")
+neet_summary <- neet_continent_data %>%
+  group_by(continent) %>%
+  summarise(
+    n_observations = n(),
+    n_countries = n_distinct(code),
+    min_neet = round(min(neet_share, na.rm = TRUE), 2),
+    q1_neet = round(quantile(neet_share, 0.25, na.rm = TRUE), 2),
+    median_neet = round(median(neet_share, na.rm = TRUE), 2),
+    q3_neet = round(quantile(neet_share, 0.75, na.rm = TRUE), 2),
+    max_neet = round(max(neet_share, na.rm = TRUE), 2),
+    mean_neet = round(mean(neet_share, na.rm = TRUE), 2),
+    .groups = "drop"
   )
 
-# Visualize NA percentage by year
-graph22 <- ggplot(neet_na_by_year, aes(x = year, y = neet_na_percentage)) +
-  geom_line(linewidth = 1.2, color = "#b2182b") +
-  geom_point(size = 3, color = "#b2182b") +
-  theme_minimal() +
-  theme(
-    panel.grid.major = element_line(colour = "grey70"),
-    panel.grid.minor = element_line(colour = "grey90", linewidth = 0.4),
-    plot.title = element_text(hjust = 0.5)
-  ) +
-  labs(
-    x = "Year",
-    y = "Missing NEET Data (%)",
-    title = "Trend of Missing NEET Data Over Time (2010-2021)"
-  ) +
-  scale_x_continuous(breaks = 2010:2021)
+print(neet_summary)
+
+
+
+
+# ============================================================================
+# NEET Trends Over Time by Continent
+# ============================================================================
+
+# Prepare data: calculate mean NEET by continent and year
+neet_time_data <- master_data %>%
+  filter(!is.na(neet_share), !is.na(continent)) %>%
+  group_by(continent, year) %>%
+  summarise(
+    mean_neet = mean(neet_share, na.rm = TRUE),
+    median_neet = median(neet_share, na.rm = TRUE),
+    n_countries = n_distinct(code),
+    .groups = "drop"
+  )
+
+cat("\n=== NEET Trends Over Time Created ===\n")
+cat("✓ Saved: neet_trends_over_time.png\n\n")
+
+# ============================================================================
+# BONUS: Create a faceted plot for detailed view by continent
+# ============================================================================
+
+# Prepare individual country data
+neet_country_time <- master_data %>%
+  filter(!is.na(neet_share), !is.na(continent))
+
+# ============================================================================
+# Print summary statistics
+# ============================================================================
+
+cat("=== NEET Change Over Time Summary ===\n\n")
+
+# Calculate first and last year averages by continent
+time_summary <- neet_time_data %>%
+  group_by(continent) %>%
+  arrange(year) %>%
+  filter(year == min(year) | year == max(year)) %>%
+  summarise(
+    year_range = paste(min(year), "-", max(year)),
+    initial_neet = first(mean_neet),
+    final_neet = last(mean_neet),
+    absolute_change = final_neet - initial_neet,
+    percent_change = round((final_neet - initial_neet) / initial_neet * 100, 1),
+    .groups = "drop"
+  )
+
+print(time_summary)
+
+cat("\n✓ All visualizations created successfully!\n")
+
+cat("\n✓ Box plot saved as: neet_boxplot_by_continent.png\n")
+
+
+
+# ============================================================================
+# NEET vs Education Spending - Interactive Visualization
+# ============================================================================
+
+# Load the master dataset
+master_data <- read_csv("master_dataset.csv")
+
+# Prepare data: filter for complete cases
+neet_edu_data <- master_data %>%
+  filter(!is.na(neet_share), !is.na(edu_expenditure_gdp), !is.na(continent)) %>%
+  # Get most recent year for each country to avoid overplotting
+  group_by(code) %>%
+  arrange(desc(year)) %>%
+  slice(1) %>%
+  ungroup()
+
+# Identify interesting countries to label (extremes and notable cases)
+countries_to_label <- neet_edu_data %>%
+  group_by(continent) %>%
+  arrange(desc(neet_share)) %>%
+  slice(1:2) %>%  # Top 2 highest NEET per continent
+  ungroup() %>%
+  bind_rows(
+    neet_edu_data %>%
+      filter(edu_expenditure_gdp > 6 | neet_share > 25)  # High spenders or high NEET
+  ) %>%
+  distinct(code, .keep_all = TRUE)
+
+# ============================================================================
+# CALCULATE CORRELATION STATISTICS
+# ============================================================================
+
+cat("=== CORRELATION ANALYSIS ===\n\n")
+
+# Overall correlation
+overall_cor <- cor(neet_edu_data$edu_expenditure_gdp, 
+                   neet_edu_data$neet_share, 
+                   use = "complete.obs")
+cat("Overall Correlation:", round(overall_cor, 3), "\n\n")
+
+# Correlation by continent
+continent_cor <- neet_edu_data %>%
+  group_by(continent) %>%
+  summarise(
+    n_countries = n(),
+    correlation = round(cor(edu_expenditure_gdp, neet_share, 
+                            use = "complete.obs"), 3),
+    mean_edu_spending = round(mean(edu_expenditure_gdp, na.rm = TRUE), 2),
+    mean_neet = round(mean(neet_share, na.rm = TRUE), 2),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(abs(correlation)))
+
+print(continent_cor)
+
+# Linear regression summary
+cat("\n=== LINEAR REGRESSION MODEL ===\n")
+model <- lm(neet_share ~ edu_expenditure_gdp, data = neet_edu_data)
+print(summary(model))
+
+cat("\n✓ All visualizations created successfully!\n")
+cat("\nKEY INSIGHTS:\n")
+cat("- Point size = GDP per capita (bigger = wealthier)\n")
+cat("- Point color = Continent\n")
+cat("- Gray line = Overall trend\n")
+cat("- Labels = Notable high-NEET or high-spending countries\n")
+
+
+# ============================================================================
+# NEET vs GDP Growth Rate - Clean & Simple Visualization
+# ============================================================================
+
+# ============================================================================
+# Calculate GDP Growth Rate
+# ============================================================================
+
+cat("=== Calculating GDP Growth Rates ===\n")
+
+# Calculate year-over-year GDP growth rate
+gdp_growth_data <- master_data %>%
+  filter(!is.na(gdp_per_capita)) %>%
+  arrange(code, year) %>%
+  group_by(code) %>%
+  mutate(
+    gdp_growth_rate = (gdp_per_capita - lag(gdp_per_capita)) / lag(gdp_per_capita) * 100
+  ) %>%
+  ungroup()
+
+# Combine with NEET data
+neet_gdp_growth <- gdp_growth_data %>%
+  filter(!is.na(neet_share), !is.na(gdp_growth_rate), !is.na(continent)) %>%
+  filter(gdp_growth_rate > -30, gdp_growth_rate < 30)  # Remove extreme outliers
+
+cat("Total observations:", nrow(neet_gdp_growth), "\n\n")
+
+# ============================================================================
+# Simple Statistics
+# ============================================================================
+
+cat("=== KEY FINDINGS ===\n\n")
+
+# Overall correlation
+overall_cor <- cor(neet_gdp_growth$gdp_growth_rate, 
+                   neet_gdp_growth$neet_share, 
+                   use = "complete.obs")
+cat("Correlation between GDP growth and NEET:", round(overall_cor, 3), "\n")
+
+if(overall_cor < -0.1) {
+  cat("→ Negative relationship: Higher growth = Lower NEET\n\n")
+} else if(overall_cor > 0.1) {
+  cat("→ Positive relationship: Higher growth = Higher NEET\n\n")
+} else {
+  cat("→ Weak/No clear relationship\n\n")
+}
+
+# Simple summary by economic condition
+cat("Average NEET by Economic Condition:\n")
+growth_summary <- neet_gdp_growth %>%
+  mutate(
+    condition = case_when(
+      gdp_growth_rate < 0 ~ "Negative Growth",
+      gdp_growth_rate < 3 ~ "Low Growth (0-3%)",
+      TRUE ~ "Strong Growth (>3%)"
+    )
+  ) %>%
+  group_by(condition) %>%
+  summarise(
+    observations = n(),
+    avg_neet = round(mean(neet_share), 1),
+    .groups = "drop"
+  )
+
+print(growth_summary)
+
+cat("\n✓ Clean visualization created!\n")
+
+print("\nNEET data availability by year (2010-2021):")
+print(neet_na_by_year)
