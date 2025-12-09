@@ -3,13 +3,13 @@
 # Data Cleaning and Merging 
 
 # Install required packages
-# install.packages('tidyverse')
-# install.packages('dplyr')
-# install.packages('readr')
-# install.packages('ggplot2')
-# install.packages('scales')
-# install.packages('maps')
-# install.packages('ggrepel')
+install.packages('tidyverse')
+install.packages('dplyr')
+install.packages('readr')
+install.packages('ggplot2')
+install.packages('scales')
+install.packages('maps')
+install.packages('ggrepel')
 
 # Load required packages
 library(tidyverse)
