@@ -1,4 +1,10 @@
+library(tidyverse)
+library(dplyr)
+library(readr)
+library(ggplot2)
 
+master <- read.csv('master_dataset.csv')
+view(master)
 
 # Step 1: Get ALL countries from master dataset (2010-2021) with their most recent population
 all_countries_with_pop <- master %>%
@@ -21,19 +27,19 @@ neet_country_change <- master %>%
     baseline_year = first(year[year >= 2010 & year <= 2015]),
     baseline_pop = first(population[year >= 2010 & year <= 2015 & !is.na(population)]),
     recent_neet = ifelse(
-      any(year == 2020 & !is.na(neet_share)),
-      neet_share[year == 2020][1],
-      last(neet_share[year >= 2016 & year < 2020])
+      any(year == 2018 & !is.na(neet_share)),
+      neet_share[year == 2018][1],
+      last(neet_share[year >= 2016 & year < 2018])
     ),
     recent_year = ifelse(
-      any(year == 2020 & !is.na(neet_share)),
-      2020,
-      last(year[year >= 2016 & year < 2020])
+      any(year == 2018 & !is.na(neet_share)),
+      2018,
+      last(year[year >= 2016 & year < 2018])
     ),
     recent_pop = ifelse(
-      any(year == 2020 & !is.na(population)),
-      population[year == 2020][1],
-      last(population[year >= 2016 & year < 2020 & !is.na(population)])
+      any(year == 2018 & !is.na(population)),
+      population[year == 2018][1],
+      last(population[year >= 2016 & year < 2018 & !is.na(population)])
     ),
     .groups = 'drop'
   ) %>%
@@ -103,16 +109,15 @@ ggplot(population_weighted_summary_complete, aes(x = continent, y = percentage, 
     panel.grid.minor = element_line(colour = "grey90", linewidth = 0.4),
     legend.position = "bottom",
     legend.direction = "horizontal",
-    plot.title = element_text(hjust = 0, face = "bold", size = 16),
-    plot.subtitle = element_text(size = 14),
+    plot.title = element_text(hjust = 0.5),
     axis.text.x = element_text(angle = 45, hjust = 1)
   ) +
   labs(
     x = "Continent",
     y = "Percentage of Total Population (%)",
     fill = "Target Achievement",
-    title = "Figure 9: NEET Reduction Target Achievement",
-    subtitle = "Population Weighted Continent level comparison (EXCLUDING COVID YEARS)"
+    title = "NEET Reduction Target Achievement by Continent (Population-Weighted)",
+    subtitle = "Target: <10% → 10% reduction | 10-30% → 15% reduction | >30% → 10% reduction\n(Including all countries with population data)"
   ) +
   geom_text(
     aes(label = ifelse(percentage > 5, paste0(round(percentage, 1), "%"), "")),
@@ -203,65 +208,3 @@ ggplot(neet_na_by_year, aes(x = year, y = neet_na_percentage)) +
     title = "Trend of Missing NEET Data Over Time (2010-2021)"
   ) +
   scale_x_continuous(breaks = 2010:2021)
-
-# Calculate how close each country is to their target
-# Filter for countries that DON'T have 2015 OR DON'T have 2020
-closest_5_countries_missing_data <- country_target_achievement %>%
-  filter(!is.na(pct_change_neet) & !is.na(target_reduction)) %>%
-  filter(baseline_year != 2015 | recent_year != 2020) %>%  # Missing 2015 OR 2020
-  mutate(
-    # Calculate distance from target (negative = exceeded target, positive = fell short)
-    distance_from_target = pct_change_neet - target_reduction,
-    abs_distance_from_target = abs(distance_from_target)
-  ) %>%
-  arrange(abs_distance_from_target) %>%
-  select(country, continent, baseline_year, recent_year, baseline_neet, recent_neet, 
-         pct_change_neet, target_reduction, distance_from_target, target_status) %>%
-  head(5)
-
-print("Top 5 countries closest to their target (missing 2015 OR 2020 data):")
-view(closest_5_countries_missing_data)
-
-# Find countries closest to 10% or 30% NEET
-countries_near_thresholds <- country_target_achievement %>%
-  filter(!is.na(baseline_neet)) %>%
-  mutate(
-    # Calculate distance from 10% and 30%
-    distance_from_10 = abs(baseline_neet - 10),
-    distance_from_30 = abs(baseline_neet - 30),
-    # Which threshold is closer?
-    closest_threshold = ifelse(distance_from_10 < distance_from_30, "10%", "30%"),
-    distance_from_threshold = pmin(distance_from_10, distance_from_30)
-  ) %>%
-  arrange(distance_from_threshold) %>%
-  select(country, continent, baseline_year, baseline_neet, closest_threshold, distance_from_threshold) %>%
-  head(10)
-
-print("Top 10 countries with NEET closest to 10% or 30%:")
-view(countries_near_thresholds)
-
-# Separate by threshold
-closest_to_10 <- country_target_achievement %>%
-  filter(!is.na(baseline_neet)) %>%
-  mutate(distance_from_10 = abs(baseline_neet - 10)) %>%
-  arrange(distance_from_10) %>%
-  select(country, continent, baseline_year, baseline_neet, distance_from_10) %>%
-  head(5)
-
-print("\nTop 5 countries closest to 10% NEET:")
-print(closest_to_10)
-
-closest_to_30 <- country_target_achievement %>%
-  filter(!is.na(baseline_neet)) %>%
-  mutate(distance_from_30 = abs(baseline_neet - 30)) %>%
-  arrange(distance_from_30) %>%
-  select(country, continent, baseline_year, baseline_neet, distance_from_30) %>%
-  head(5)
-
-print("\nTop 5 countries closest to 30% NEET:")
-print(closest_to_30)
-
-# Save
-write_csv(countries_near_thresholds, "countries_near_10_or_30_threshold.csv")
-write_csv(closest_to_10, "countries_closest_to_10_percent.csv")
-write_csv(closest_to_30, "countries_closest_to_30_percent.csv")
