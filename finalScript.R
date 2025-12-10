@@ -2086,7 +2086,7 @@ graph5 <- ggplot(population_weighted_summary_complete, aes(x = continent.x, y = 
     y = "Percentage of Total Population (%)",
     fill = "Target Achievement",
     title = "Figure 9: NEET Reduction Target Achievement",
-    subtitle = "Population Weighted Continent level comparison (EXCLUDING COVID YEARS)"
+    subtitle = "Population Weighted Continent level comparison"
   ) +
   geom_text(
     aes(label = ifelse(percentage > 5, paste0(round(percentage, 1), "%"), "")),
